@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wealth Building Potential Calculator</title>
+    <style>
+        /* Add your CSS styles here */
+        body {
+            font-family: "Open Sans", sans-serif;
+            margin: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        input[type='number'], label {
+            margin-bottom: 10px;
+            display: block;
+        }
+        .chart-container {
+            width: 80%;
+            height: 400px;
+            margin: 30px auto;
+        }
+        .download-button {
+            margin-top: 10px;
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+    <h1>Wealth Building Potential Calculator</h1>
+    <form id="calculator-form" onsubmit="calculateWealth(event)">
+        <label for="income">Income ($):</label>
+        <input type="text" inputmode="numeric" id="income" oninput="validateNumberInput(this)" aria-required="true" required><br>
+
+        <label for="income_growth">Income Growth (%):</label>
+        <input type="number" id="income_growth" min="0" max="100" step="any" aria-required="true" required><br>
+
+        <label for="time_years">Time (years):</label>
+        <input type="number" id="time_years" min="1" step="1" aria-required="true" required><br>
+
+        <label for="living_expenses_pct">Living Expenses (% of income):</label>
+        <input type="number" id="living_expenses_pct" min="0" max="100" step="any" aria-required="true" required><br>
+
+        <label for="rate_of_return">Rate of Return (per year %):</label>
+        <input type="number" id="rate_of_return" min="0" max="100" step="any" aria-required="true" required><br>
+
+        <input type="submit" value="Calculate">
+    </form>
+
+    <div class="chart-container">
+        <canvas id="investmentChart"></canvas>
+    </div>
+
+    <div id="results" class="results">
+        <!-- Results will be inserted here -->
+    </div>
+
+    <button onclick="downloadCSV()" class="download-button">Download as CSV</button>
+
+    <!-- Include Chart.js from a CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <script>
+function calculateWealth(event) {
+    event.preventDefault();
+
+    // Collect form values, apply validation, and handle errors
+    try {
+        const income = validateInput(document.getElementById('income'));
+        const income_growth = validateInput(document.getElementById('income_growth')) / 100;
+        const time_years = parseInt(validateInput(document.getElementById('time_years')), 10);
+        const living_expenses_pct = validateInput(document.getElementById('living_expenses_pct')) / 100;
+        const rate_of_return = validateInput(document.getElementById('rate_of_return')) / 100;
+
+        // Setup initial values
+        let investmentYears = [];
+        let investmentValues = [];
+        let prev_investment_value = 0;
+
+        let resultsHTML = `
+            <table id="resultsTable">
+                <tr>
+                    <th>Year</th>
+                    <th>Income</th>
+                    <th>Living Expenses</th>
+                    <th>Annual Saving</th>
+                    <th>Investment Growth</th>
+                    <th>Investments Value</th>
+                </tr>
+        `;
+
+        for (let year = 1; year <= time_years; year++) {
+            let curr_income = income * Math.pow(1 + income_growth, year - 1); // Use year - 1 because we're starting from 1
+            let curr_living_expenses = -curr_income * living_expenses_pct;
+            let curr_annual_saving = curr_income + curr_living_expenses;
+            let curr_investment_growth = (prev_investment_value + 0.5 * curr_annual_saving) * rate_of_return;
+            let curr_investment_value = prev_investment_value + curr_annual_saving + curr_investment_growth;
+
+            investmentYears.push(year);
+            investmentValues.push(Math.round(curr_investment_value)); // Round and add investmentValues for the chart
+
+            resultsHTML += `
+                <tr>
+                    <td>${year}</td>
+                    <td>${Math.round(curr_income).toLocaleString('en-US')}</td>
+                    <td>${Math.round(curr_living_expenses).toLocaleString('en-US')}</td>
+                    <td>${Math.round(curr_annual_saving).toLocaleString('en-US')}</td>
+                    <td>${Math.round(curr_investment_growth).toLocaleString('en-US')}</td>
+                    <td>${Math.round(curr_investment_value).toLocaleString('en-US')}</td>
+                </tr>
+            `;
+
+            prev_investment_value = curr_investment_value;
+        }
+
+        resultsHTML += '</table>';
+        document.getElementById('results').innerHTML = resultsHTML;
+        document.querySelector('.download-button').style.display = 'block'; // Show the download button
+
+        // Update the chart below
+        updateChart(investmentYears, investmentValues);
+    } catch (error) {
+        alert(error.message);
+        return;
+    }
+}
+        function validateInput(inputElement) {
+            const value = parseFloat(inputElement.value);
+            if (isNaN(value) || value < parseFloat(inputElement.min) || value > parseFloat(inputElement.max)) {
+                inputElement.focus();
+                throw new Error(`Please enter a valid value for ${inputElement.previousElementSibling.innerText}`);
+            }
+            return value;
+        }
+        
+        function validateNumberInput(inputElement) {
+            inputElement.value = inputElement.value.replace(/[^\d]/g, '');
+        }
+
+        function downloadCSV() {
+            const table = document.getElementById('resultsTable');
+            let csvContent = '';
+            
+            // Loop through each row of the table and construct a CSV string
+            for (let i = 0; i < table.rows.length; i++) {
+                let row = [], cols = table.rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) {
+                    // Convert each cell to a CSV-friendly format (escaping quotes, etc.)
+                    let dataString = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, '').replace(/(\s\s)/gm, ' ');
+                    dataString = dataString.replace(/"/g, '""'); // Escape double-quote characters
+                    row.push('"' + dataString + '"');
+                }
+                csvContent += row.join(",") + "\r\n";
+            }
+
+            // Create a Blob from the CSV string and trigger a download
+            let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            let url = URL.createObjectURL(blob);
+            let downloadLink = document.createElement("a");
+            downloadLink.href = url;
+            downloadLink.download = "wealth_building_results.csv";
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function updateChart(investmentYears, investmentValues) {
+            const ctx = document.getElementById('investmentChart').getContext('2d');
+            if (window.investmentChartInstance) {
+                window.investmentChartInstance.destroy();
+            }
+            window.investmentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: investmentYears,
+                    datasets: [{
+                        label: 'Investment Value',
+                        data: investmentValues,
+                        backgroundColor: 'rgba(0, 123, 255, 0.5)',
+                        borderColor: 'rgb(0, 123, 255)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value, index, ticks) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: "Wealth Building Potential",
+                            padding: {
+                                top: 30,
+                                bottom: 10
+                            }
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+    </script>
+</body>
+</html>
